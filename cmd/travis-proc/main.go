@@ -18,12 +18,12 @@ func main() {
 				Name:    "debug",
 				Value:   false,
 				Usage:   "enable debug logging and ensure TRAVIS_DEBUG is set in all subshells",
-				EnvVars: []string{"DEBUG", "TRAVIS_PROC_DEBUG"},
+				EnvVars: []string{"DEBUG", "TRAVIS_JOB_DEBUG"},
 			},
 			&cli.StringFlag{
 				Name:    "health-url",
 				Usage:   "url to poll during runtime to report health of job",
-				EnvVars: []string{"HEALTH_URL", "TRAVIS_PROC_HEALTH_URL"},
+				EnvVars: []string{"HEALTH_URL", "TRAVIS_JOB_HEALTH_URL"},
 			},
 		},
 		Commands: []*cli.Command{
@@ -32,21 +32,21 @@ func main() {
 				Usage: "wait for and then run a job",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:    "job-url",
+						Name:    "url",
 						Usage:   "url to poll for a job",
-						EnvVars: []string{"JOB_URL", "TRAVIS_PROC_JOB_URL"},
+						EnvVars: []string{"JOB_URL", "TRAVIS_JOB_URL"},
 					},
 					&cli.DurationFlag{
 						Name:    "max-poll-time",
 						Value:   30 * time.Minute,
 						Usage:   "max amount of time to poll before imploding",
-						EnvVars: []string{"MAX_POLL_TIME", "TRAVIS_PROC_MAX_POLL_TIME"},
+						EnvVars: []string{"MAX_POLL_TIME", "TRAVIS_JOB_MAX_POLL_TIME"},
 					},
 					&cli.DurationFlag{
 						Name:    "wait-interval",
 						Value:   3 * time.Second,
 						Usage:   "interval to sleep between waiting polls",
-						EnvVars: []string{"WAIT_INTERVAL", "TRAVIS_PROC_WAIT_INTERVAL"},
+						EnvVars: []string{"WAIT_INTERVAL", "TRAVIS_JOB_WAIT_INTERVAL"},
 					},
 				},
 				Action: func(c *cli.Context) error {
@@ -57,7 +57,7 @@ func main() {
 
 					log := setupLogger(c.Bool("debug"))
 
-					src, err := job.NewSource(log, c.String("job-url"))
+					src, err := job.NewSource(log, c.String("url"))
 					if err != nil {
 						return cli.Exit(fmt.Sprintf("failed to create job source: %v", err), 2)
 					}
