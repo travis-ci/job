@@ -1,4 +1,4 @@
-module github.com/travis-ci/proc
+module github.com/travis-ci/job
 
 require (
 	github.com/sirupsen/logrus v1.3.0

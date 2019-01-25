@@ -2,7 +2,7 @@ GOOS := $(shell go env GOOS)
 GOARCH := $(shell go env GOARCH)
 SOURCES := $(shell git ls-files '*.go')
 TARGETS := \
-	build/$(GOOS)/$(GOARCH)/travis-proc
+	build/$(GOOS)/$(GOARCH)/travis-job
 
 .PHONY: all
 all: build test
@@ -10,8 +10,8 @@ all: build test
 .PHONY: build
 build: $(TARGETS)
 
-build/$(GOOS)/$(GOARCH)/travis-proc: $(SOURCES)
-	go build -o $@ ./cmd/travis-proc/...
+build/$(GOOS)/$(GOARCH)/travis-job: $(SOURCES)
+	go build -o $@ ./cmd/travis-job/...
 
 .PHONY: clean
 clean:

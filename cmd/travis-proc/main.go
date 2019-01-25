@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/travis-ci/proc"
+	"github.com/travis-ci/job"
 	cli "gopkg.in/urfave/cli.v2"
 )
 
@@ -22,7 +22,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "health-url",
-				Usage:   "url to poll during runtime to report health of proc",
+				Usage:   "url to poll during runtime to report health of job",
 				EnvVars: []string{"HEALTH_URL", "TRAVIS_PROC_HEALTH_URL"},
 			},
 		},
@@ -57,17 +57,17 @@ func main() {
 
 					log := setupLogger(c.Bool("debug"))
 
-					src, err := proc.NewSource(log, c.String("job-url"))
+					src, err := job.NewSource(log, c.String("job-url"))
 					if err != nil {
 						return cli.Exit(fmt.Sprintf("failed to create job source: %v", err), 2)
 					}
 
-					runner, err := proc.NewRunner(log)
+					runner, err := job.NewRunner(log)
 					if err != nil {
 						return cli.Exit(fmt.Sprintf("failed to create job runner: %v", err), 3)
 					}
 
-					w := proc.NewWaiter(log, c.Duration("wait-interval"), src, runner)
+					w := job.NewWaiter(log, c.Duration("wait-interval"), src, runner)
 
 					err = w.Wait(ctx)
 
