@@ -1,2 +1,12 @@
-language: go
-go: 1.11.x
+# FIXME: once go module projects are supported {
+# language: go
+# go: 1.11.x
+# }
+language: bash
+install:
+- curl -sSL -o ~/bin/gimme https://build.travis-ci.com/files/gimme
+- chmod +x ~/bin/gimme
+- gimme -k &>/dev/null
+- gimme 1.11.x >/var/tmp/gimme.out
+- source /var/tmp/gimme.out
+script: make
