@@ -1,4 +1,4 @@
 # Travis Proc
 
-Execute a command, stream the output somewhere, and report the status somewhere
+Execute a command, stream some output somewhere, and report the status somewhere
 else.
