@@ -7,14 +7,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func NewWaiter(log logrus.FieldLogger, interval time.Duration,
+func NewWaiter(log logrus.FieldLogger, interval, max time.Duration,
 	src Source, runner Runner) Waiter {
 
 	return &fetchRetryWaiter{
+		log:      log,
+		interval: interval,
+		max:      max,
 		src:      src,
 		runner:   runner,
-		interval: interval,
-		log:      log,
 	}
 }
 
@@ -23,13 +24,16 @@ type Waiter interface {
 }
 
 type fetchRetryWaiter struct {
-	log      logrus.FieldLogger
-	interval time.Duration
-	src      Source
-	runner   Runner
+	log           logrus.FieldLogger
+	interval, max time.Duration
+	src           Source
+	runner        Runner
 }
 
 func (w *fetchRetryWaiter) Wait(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, w.max)
+	defer cancel()
+
 	for {
 		j, err := w.src.Fetch(ctx)
 		if err != nil {
@@ -37,8 +41,14 @@ func (w *fetchRetryWaiter) Wait(ctx context.Context) error {
 				"err":      err,
 				"interval": w.interval,
 			}).Debug("waiting for job")
-			time.Sleep(w.interval)
-			continue
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				time.Sleep(w.interval)
+				continue
+			}
 		}
 
 		return w.runner.Run(ctx, j)
