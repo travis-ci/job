@@ -15,7 +15,7 @@ build/$(GOOS)/$(GOARCH)/travis-job: $(SOURCES)
 
 .PHONY: clean
 clean:
-	rm -rf $(TARGETS)
+	rm -rf ./build
 
 .PHONY: test
 test:
