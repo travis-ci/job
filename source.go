@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -12,7 +11,6 @@ import (
 )
 
 type Source interface {
-	Validate() error
 	Fetch(context.Context) (Job, error)
 }
 
@@ -20,10 +18,6 @@ func NewSource(log logrus.FieldLogger, jobURL string) (Source, error) {
 	p := &urlSource{
 		log:    log,
 		jobURL: jobURL,
-	}
-
-	if err := p.Validate(); err != nil {
-		return nil, err
 	}
 
 	return p, nil
@@ -48,20 +42,6 @@ func (us *urlSource) Fetch(ctx context.Context) (Job, error) {
 	}
 
 	return nil, nil
-}
-
-func (us *urlSource) Validate() error {
-	u, err := url.Parse(us.jobURL)
-
-	if err != nil {
-		return err
-	}
-
-	if u.Scheme == "" || u.Host == "" {
-		return fmt.Errorf("invalid url %q", u)
-	}
-
-	return nil
 }
 
 func (us *urlSource) jobFromFile(path string) (Job, error) {

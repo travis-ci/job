@@ -2,26 +2,23 @@ package job
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/sirupsen/logrus"
 )
 
 type Runner interface {
 	Run(context.Context, Job) error
-	Validate() error
 }
 
 func NewRunner(log logrus.FieldLogger) (Runner, error) {
-	runner := &bashRunner{}
-	return runner, runner.Validate()
+	return &bashRunner{}, nil
 }
 
 type bashRunner struct{}
 
-func (bjr *bashRunner) Validate() error {
-	return nil
-}
-
 func (bjr *bashRunner) Run(ctx context.Context, job Job) error {
+	fmt.Fprintf(os.Stderr, "---> not really running %v\n", job)
 	return nil
 }
