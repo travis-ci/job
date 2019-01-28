@@ -7,6 +7,12 @@ import (
 
 type Job interface {
 	ID() string
+	JWT() string
+	JobStateURL() string
+	LogPartsURL() string
+	Raw() interface{}
+	Script() (string, error)
+	Streams() map[string]string
 }
 
 type versionPeekJob struct {
@@ -20,14 +26,12 @@ func newJobFromBytes(b []byte) (Job, error) {
 		return nil, err
 	}
 
-	var j Job
 	switch vpj.Version {
 	case 1:
-		j = &jobV1{}
+		j := &jobV1Wrap{J: &jobV1{}}
+		err = json.Unmarshal(b, j.J)
+		return j, err
 	default:
 		return nil, fmt.Errorf("unknown job version %v", vpj.Version)
 	}
-
-	err = json.Unmarshal(b, j)
-	return j, err
 }

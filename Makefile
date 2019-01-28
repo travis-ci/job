@@ -20,3 +20,9 @@ clean:
 .PHONY: test
 test:
 	go test -v ./...
+
+example-payload.json: tmp $(SOURCES)
+	jq -M . $@ >tmp/$(notdir $@) && mv -v tmp/$(notdir $@) $@
+
+tmp:
+	mkdir -p $@

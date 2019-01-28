@@ -3,11 +3,18 @@ package job
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	cli "gopkg.in/urfave/cli.v2"
+)
+
+var (
+	osHostname, _ = os.Hostname()
 )
 
 func NewApp() *cli.App {
@@ -80,15 +87,19 @@ func waitCommandAction(c *cli.Context) error {
 	defer cancel()
 
 	log := setupLogger(c.Bool("debug"))
+	processorID, err := buildProcessorID()
+	if err != nil {
+		return cli.Exit(fmt.Sprintf("failed to build processor ID: %v", err), 2)
+	}
 
-	src, err := NewSource(log, c.String("url"))
+	src, err := NewSource(log, c.String("url"), processorID)
 	if err != nil {
 		return cli.Exit(fmt.Sprintf("failed to create job source: %v", err), 2)
 	}
 
-	runner, err := NewRunner(log)
+	runner, err := NewRunner(log, NewStatuser(log), NewStreamer(log))
 	if err != nil {
-		return cli.Exit(fmt.Sprintf("failed to create job runner: %v", err), 3)
+		return cli.Exit(fmt.Sprintf("failed to create job runner: %v", err), 2)
 	}
 
 	w := NewWaiter(log, c.Duration("wait-interval"),
@@ -97,7 +108,7 @@ func waitCommandAction(c *cli.Context) error {
 	err = w.Wait(ctx)
 
 	if err != nil {
-		return cli.Exit(fmt.Sprintf("failed during wait for job: %v", err), 4)
+		return cli.Exit(fmt.Sprintf("failed during wait for job: %v", err), 2)
 	}
 
 	return nil
@@ -110,25 +121,29 @@ func runCommandAction(c *cli.Context) error {
 	defer cancel()
 
 	log := setupLogger(c.Bool("debug"))
+	processorID, err := buildProcessorID()
+	if err != nil {
+		return cli.Exit(fmt.Sprintf("failed to build processor ID: %v", err), 2)
+	}
 
-	src, err := NewSource(log, fmt.Sprintf("file://%s", c.String("json")))
+	src, err := NewSource(log, fmt.Sprintf("file://%s", c.String("json")), processorID)
 	if err != nil {
 		return cli.Exit(fmt.Sprintf("failed to create job source: %v", err), 2)
 	}
 
-	runner, err := NewRunner(log)
+	runner, err := NewRunner(log, NewStatuser(log), NewStreamer(log))
 	if err != nil {
-		return cli.Exit(fmt.Sprintf("failed to create job runner: %v", err), 3)
+		return cli.Exit(fmt.Sprintf("failed to create job runner: %v", err), 2)
 	}
 
 	job, err := src.Fetch(ctx)
 	if err != nil {
-		return cli.Exit(fmt.Sprintf("failed to fetch job: %v", err), 4)
+		return cli.Exit(fmt.Sprintf("failed to fetch job: %v", err), 2)
 	}
 
 	err = runner.Run(ctx, job)
 	if err != nil {
-		return cli.Exit(fmt.Sprintf("failed to run job: %v", err), 5)
+		return cli.Exit(fmt.Sprintf("failed to run job: %v", err), 2)
 	}
 
 	return nil
@@ -149,4 +164,16 @@ func envVars(key string) []string {
 		key,
 		fmt.Sprintf("TRAVIS_JOB_%s", key),
 	}
+}
+
+func buildProcessorID() (string, error) {
+	hostname := osHostname
+	if hostname == "" {
+		hostname = "localhost"
+	}
+	procUUID, err := uuid.NewRandom()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to generate uuid")
+	}
+	return fmt.Sprintf("%s@%d.%s", procUUID.String(), os.Getpid(), hostname), nil
 }

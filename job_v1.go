@@ -1,6 +1,9 @@
 package job
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -28,6 +31,7 @@ type jobV1Data struct {
 	Queue      string                 `json:"queue"`
 	Trace      bool                   `json:"trace"`
 	Warmer     bool                   `json:"warmer"`
+	Streams    map[string]string      `json:"streams"`
 }
 
 type jobV1DataJob struct {
@@ -67,10 +71,92 @@ type jobV1DataVMConfig struct {
 	Zone     string `json:"zone"`
 }
 
-func (j *jobV1) ID() string {
-	if j.Data != nil && j.Data.Job != nil {
-		return fmt.Sprintf("%v", j.Data.Job.ID)
+type jobV1Wrap struct {
+	J *jobV1
+}
+
+func (j *jobV1Wrap) data() *jobV1Data {
+	if j.J == nil {
+		return nil
+	}
+	return j.J.Data
+}
+
+func (j *jobV1Wrap) ID() string {
+	data := j.data()
+	if data != nil && data.Job != nil {
+		return fmt.Sprintf("%v", data.Job.ID)
 	}
 
 	return ""
+}
+
+func (j *jobV1Wrap) JobStateURL() string {
+	if j.J != nil {
+		return j.J.JobStateURL
+	}
+
+	return ""
+}
+
+func (j *jobV1Wrap) LogPartsURL() string {
+	if j.J != nil {
+		return j.J.LogPartsURL
+	}
+
+	return ""
+}
+
+func (j *jobV1Wrap) JWT() string {
+	if j.J != nil {
+		return j.J.JWT
+	}
+
+	return ""
+}
+
+func (j *jobV1Wrap) Raw() interface{} {
+	if j.J != nil {
+		return j.J
+	}
+
+	return nil
+}
+
+func (j *jobV1Wrap) Script() (string, error) {
+	if j.J == nil || j.J.JobScript == nil {
+		return "", nil
+	}
+
+	script := j.J.JobScript
+	if script.Content == "" {
+		return "", nil
+	}
+
+	if script.Encoding != "base64" {
+		return "", fmt.Errorf("unknown job script encoding: %s", script.Encoding)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(script.Content)
+	return string(decoded), err
+}
+
+func (j *jobV1Wrap) Streams() map[string]string {
+	streams := map[string]string{}
+	data := j.data()
+	if data != nil && data.Streams != nil {
+		streams = data.Streams
+	}
+
+	if _, ok := streams["stdouterr"]; !ok {
+		streams["stdouterr"] = "-"
+	}
+
+	return streams
+}
+
+func (j *jobV1Wrap) MarshalJSON() ([]byte, error) {
+	outJSON := &bytes.Buffer{}
+	err := json.NewEncoder(outJSON).Encode(j.Raw())
+	return outJSON.Bytes(), err
 }
