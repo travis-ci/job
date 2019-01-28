@@ -27,10 +27,19 @@ type httpStatuser struct {
 }
 
 func (hs *httpStatuser) Status(ctx context.Context, job Job, curState, newState string) error {
+	log := hs.log.WithFields(logrus.Fields{
+		"self":      "http_statuser",
+		"job_id":    job.ID(),
+		"cur_state": curState,
+		"new_state": newState,
+	})
+
 	payload := hs.createStateUpdateBody(job, curState, newState)
 
+	log.Debug("serializing payload")
 	encodedPayload, err := json.Marshal(payload)
 	if err != nil {
+		log.WithError(err).Debug("error encoding json")
 		return errors.Wrap(err, "error encoding json")
 	}
 

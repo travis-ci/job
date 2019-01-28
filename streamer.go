@@ -30,11 +30,12 @@ func (hs *httpStreamer) Stream(ctx context.Context, job Job, name string, r io.R
 
 	for {
 		// { TODO: do http stuff
+		log.Debug("copying to stdout")
 		_, _ = io.Copy(os.Stdout, r)
 		// }
 		select {
 		case <-ctx.Done():
-			log.WithField("err", ctx.Err()).Debug("done streaming")
+			log.WithError(ctx.Err()).Debug("done streaming")
 			return ctx.Err()
 		default:
 			time.Sleep(10 * time.Millisecond)

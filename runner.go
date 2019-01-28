@@ -17,6 +17,7 @@ type Runner interface {
 
 func NewRunner(log logrus.FieldLogger, statuser Statuser, streamer Streamer) (Runner, error) {
 	return &bashRunner{
+		log:      log,
 		statuser: statuser,
 		streamer: streamer,
 	}, nil
@@ -29,12 +30,20 @@ type bashRunner struct {
 }
 
 func (br *bashRunner) Run(ctx context.Context, job Job) error {
+	log := br.log.WithField("job_id", job.ID())
+
+	log.Debug("extracting script")
 	script, err := job.Script()
 	if err != nil {
+		log.WithError(err).Error("failed to extract job script")
 		return errors.Wrap(err, "failed to extract job script")
 	}
 
 	dest := "build.sh"
+	log.WithFields(logrus.Fields{
+		"dest": dest,
+		"len":  len(script),
+	}).Debug("writing script")
 	err = ioutil.WriteFile(dest, []byte(script), os.FileMode(0755))
 	if err != nil {
 		return errors.Wrap(err, "failed to write job script")
@@ -43,6 +52,7 @@ func (br *bashRunner) Run(ctx context.Context, job Job) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	log.Debug("starting stdouterr streamer")
 	pr, pw := io.Pipe()
 	go br.streamer.Stream(ctx, job, "stdouterr", pr)
 
@@ -50,17 +60,18 @@ func (br *bashRunner) Run(ctx context.Context, job Job) error {
 	cmd.Stdout = pw
 	cmd.Stderr = pw
 
+	log.Debug("staring command")
 	err = cmd.Start()
 	if err != nil {
-		statusErr := br.statuser.Status(ctx, job, "started", "failed")
-		if statusErr != nil {
-			err = errors.Wrap(err, statusErr.Error())
-		}
+		log.WithError(err).Error("failed to start command")
+		_ = br.statuser.Status(ctx, job, "started", "failed")
 		return errors.Wrap(err, "failed to start command")
 	}
 
 	err = cmd.Wait()
 	if err != nil {
+		log.WithError(err).Error("command wait errored")
+
 		if cmd.ProcessState == nil {
 			_ = br.statuser.Status(ctx, job, "running", "errored")
 			return errors.Wrap(err, "no process state found")
@@ -79,5 +90,6 @@ func (br *bashRunner) Run(ctx context.Context, job Job) error {
 		return err
 	}
 
+	log.Debug("command completed")
 	return nil
 }
