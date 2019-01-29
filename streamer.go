@@ -14,7 +14,7 @@ type Streamer interface {
 }
 
 func NewStreamer(log logrus.FieldLogger) Streamer {
-	return &httpStreamer{log: log}
+	return &httpStreamer{log: log.WithField("self", "http_streamer")}
 }
 
 type httpStreamer struct {
@@ -23,7 +23,6 @@ type httpStreamer struct {
 
 func (hs *httpStreamer) Stream(ctx context.Context, job Job, name string, r io.Reader) error {
 	log := hs.log.WithFields(logrus.Fields{
-		"self":   "http_streamer",
 		"job_id": job.ID(),
 		"stream": name,
 	})

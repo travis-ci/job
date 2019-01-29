@@ -18,7 +18,7 @@ type Statuser interface {
 
 func NewStatuser(log logrus.FieldLogger) Statuser {
 	return &httpStatuser{
-		log: log,
+		log: log.WithField("self", "http_statuser"),
 	}
 }
 
@@ -28,7 +28,6 @@ type httpStatuser struct {
 
 func (hs *httpStatuser) Status(ctx context.Context, job Job, curState, newState string) error {
 	log := hs.log.WithFields(logrus.Fields{
-		"self":      "http_statuser",
 		"job_id":    job.ID(),
 		"cur_state": curState,
 		"new_state": newState,

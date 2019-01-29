@@ -2,10 +2,12 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -16,21 +18,26 @@ type Runner interface {
 }
 
 func NewRunner(log logrus.FieldLogger, statuser Statuser, streamer Streamer) (Runner, error) {
-	return &bashRunner{
-		log:      log,
-		statuser: statuser,
-		streamer: streamer,
+	return &execRunner{
+		interpreter: "bash",
+		log:         log.WithField("self", "exec_runner"),
+		statuser:    statuser,
+		streamer:    streamer,
 	}, nil
 }
 
-type bashRunner struct {
-	log      logrus.FieldLogger
-	statuser Statuser
-	streamer Streamer
+type execRunner struct {
+	interpreter string
+	log         logrus.FieldLogger
+	statuser    Statuser
+	streamer    Streamer
 }
 
-func (br *bashRunner) Run(ctx context.Context, job Job) error {
-	log := br.log.WithField("job_id", job.ID())
+func (er *execRunner) Run(ctx context.Context, job Job) error {
+	log := er.log.WithFields(logrus.Fields{
+		"job_id": job.ID(),
+	})
+	er.status(ctx, job, "queued", "received")
 
 	log.Debug("extracting script")
 	script, err := job.Script()
@@ -39,7 +46,7 @@ func (br *bashRunner) Run(ctx context.Context, job Job) error {
 		return errors.Wrap(err, "failed to extract job script")
 	}
 
-	dest := "build.sh"
+	dest := path.Join(os.TempDir(), fmt.Sprintf("travis-job-%v.%s", job.ID(), er.interpreter))
 	log.WithFields(logrus.Fields{
 		"dest": dest,
 		"len":  len(script),
@@ -54,17 +61,18 @@ func (br *bashRunner) Run(ctx context.Context, job Job) error {
 
 	log.Debug("starting stdouterr streamer")
 	pr, pw := io.Pipe()
-	go br.streamer.Stream(ctx, job, "stdouterr", pr)
+	go er.streamer.Stream(ctx, job, "stdouterr", pr)
 
-	cmd := exec.CommandContext(ctx, "bash", dest)
+	cmd := exec.CommandContext(ctx, er.interpreter, dest)
 	cmd.Stdout = pw
 	cmd.Stderr = pw
 
-	log.Debug("staring command")
+	er.status(ctx, job, "received", "started")
+	log.Debug("starting command")
 	err = cmd.Start()
 	if err != nil {
 		log.WithError(err).Error("failed to start command")
-		_ = br.statuser.Status(ctx, job, "started", "failed")
+		er.status(ctx, job, "started", "failed")
 		return errors.Wrap(err, "failed to start command")
 	}
 
@@ -73,23 +81,36 @@ func (br *bashRunner) Run(ctx context.Context, job Job) error {
 		log.WithError(err).Error("command wait errored")
 
 		if cmd.ProcessState == nil {
-			_ = br.statuser.Status(ctx, job, "running", "errored")
+			er.status(ctx, job, "started", "errored")
 			return errors.Wrap(err, "no process state found")
 		}
 
 		if !cmd.ProcessState.Exited() {
-			_ = br.statuser.Status(ctx, job, "running", "errored")
+			er.status(ctx, job, "started", "errored")
 			return errors.Wrap(err, "process did not exit")
 		}
 
 		if !cmd.ProcessState.Success() {
-			_ = br.statuser.Status(ctx, job, "running", "failed")
+			er.status(ctx, job, "started", "failed")
 			return errors.Wrap(err, "process exited without success")
 		}
 
+		er.status(ctx, job, "started", "failed")
 		return err
 	}
 
+	er.status(ctx, job, "started", "passed")
 	log.Debug("command completed")
 	return nil
+}
+
+func (er *execRunner) status(ctx context.Context, job Job, curState, newState string) {
+	log := er.log.WithFields(logrus.Fields{
+		"job_id": job.ID(),
+	})
+
+	statusErr := er.statuser.Status(ctx, job, curState, newState)
+	if statusErr != nil {
+		log.WithError(statusErr).Error("failed to set job status")
+	}
 }

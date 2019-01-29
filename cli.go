@@ -131,16 +131,19 @@ func runCommandAction(c *cli.Context) error {
 		return cli.Exit(fmt.Sprintf("failed to create job source: %v", err), 2)
 	}
 
+	log.Debug("creating job runner")
 	runner, err := NewRunner(log, NewStatuser(log), NewStreamer(log))
 	if err != nil {
 		return cli.Exit(fmt.Sprintf("failed to create job runner: %v", err), 2)
 	}
 
+	log.Debug("fetching job")
 	job, err := src.Fetch(ctx)
 	if err != nil {
 		return cli.Exit(fmt.Sprintf("failed to fetch job: %v", err), 2)
 	}
 
+	log.WithField("job_id", job.ID()).Debug("running job")
 	err = runner.Run(ctx, job)
 	if err != nil {
 		return cli.Exit(fmt.Sprintf("failed to run job: %v", err), 2)
