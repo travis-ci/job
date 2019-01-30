@@ -1,16 +1,16 @@
 {
   "job_script": {
     "encoding": "base64",
-    "content": "ZWNobyB1bSB3YXQK"
+    "content": "ZWNobyBIZWxsbyBXb3JsZAo="
   },
-  "job_state_url": "https://auth:verysecret@job-state.example.com",
-  "log_parts_url": "https://auth:supersecret@log-parts.example.com",
+  "job_state_url": "file://./tmp/travis-job-{job_id}.state",
+  "log_parts_url": "file://./tmp/travis-job-{job_id}.log_parts",
   "jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJtZSIsImV4cCI6MTU0ODc5OTU4MSwic3ViIjoxMjM0NTY3OH0.q5rqZOw62yjFccCEyV0K6UY3xKH91al4powmx4PARpo",
   "image_name": "travis-ci-jasper-1548699439-fafafaf",
   "data": {
     "type": "test",
     "vm_type": "default",
-    "queue": "builds.ec2",
+    "queue": "builds.local",
     "config": {
       "language": "ruby",
       "script": "echo Hello World",

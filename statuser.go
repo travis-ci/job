@@ -5,7 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 
 	"github.com/jtacoma/uritemplates"
 	"github.com/pkg/errors"
@@ -13,48 +17,70 @@ import (
 )
 
 type Statuser interface {
-	Status(context.Context, Job, string, string) error
+	Status(context.Context, Job, StateUpdate) error
 }
 
 func NewStatuser(log logrus.FieldLogger) Statuser {
-	return &httpStatuser{
+	return &urlStatuser{
 		log: log.WithField("self", "http_statuser"),
 	}
 }
 
-type httpStatuser struct {
+type urlStatuser struct {
 	log logrus.FieldLogger
 }
 
-func (hs *httpStatuser) Status(ctx context.Context, job Job, curState, newState string) error {
-	log := hs.log.WithFields(logrus.Fields{
-		"job_id":    job.ID(),
-		"cur_state": curState,
-		"new_state": newState,
-	})
-
-	payload := hs.createStateUpdateBody(job, curState, newState)
-
-	log.Debug("serializing payload")
-	encodedPayload, err := json.Marshal(payload)
-	if err != nil {
-		log.WithError(err).Debug("error encoding json")
-		return errors.Wrap(err, "error encoding json")
-	}
-
+func (us *urlStatuser) Status(ctx context.Context, job Job, stateUpdate StateUpdate) error {
 	template, err := uritemplates.Parse(job.JobStateURL())
 	if err != nil {
 		return errors.Wrap(err, "couldn't parse base URL template")
 	}
 
-	u, err := template.Expand(map[string]interface{}{
+	expanded, err := template.Expand(map[string]interface{}{
 		"job_id": job.ID(),
 	})
 	if err != nil {
 		return errors.Wrap(err, "couldn't expand base URL template")
 	}
 
-	req, err := http.NewRequest("PATCH", u, bytes.NewReader(encodedPayload))
+	u, err := url.Parse(expanded)
+	if err != nil {
+		return errors.Wrap(err, "couldn't parse expanded URL")
+	}
+
+	switch u.Scheme {
+	case "file":
+		return us.updateViaFile(ctx, job, u, stateUpdate)
+	case "http", "https":
+		return us.updateViaHTTP(ctx, job, u, stateUpdate)
+	default:
+		return fmt.Errorf("unknown scheme %v", u.Scheme)
+	}
+}
+
+func (us *urlStatuser) updateViaFile(ctx context.Context, job Job, u *url.URL, stateUpdate StateUpdate) error {
+	dest, err := filepath.Abs(u.Host + u.Path)
+	if err != nil {
+		return errors.Wrap(err, "failed to find absolute dest path")
+	}
+	return ioutil.WriteFile(dest, []byte(fmt.Sprintf("%v\n", stateUpdate.New())), os.FileMode(0644))
+}
+
+func (us *urlStatuser) updateViaHTTP(ctx context.Context, job Job, u *url.URL, stateUpdate StateUpdate) error {
+	log := us.log.WithFields(logrus.Fields{
+		"job_id":    job.ID(),
+		"cur_state": stateUpdate.Cur(),
+		"new_state": stateUpdate.New(),
+	})
+
+	log.Debug("serializing payload")
+	encodedPayload, err := json.Marshal(stateUpdate)
+	if err != nil {
+		log.WithError(err).Debug("error encoding json")
+		return errors.Wrap(err, "error encoding json")
+	}
+
+	req, err := http.NewRequest("PATCH", u.String(), bytes.NewReader(encodedPayload))
 	if err != nil {
 		return errors.Wrap(err, "couldn't create request")
 	}
@@ -75,38 +101,4 @@ func (hs *httpStatuser) Status(ctx context.Context, job Job, curState, newState 
 	}
 
 	return nil
-}
-
-func (hs *httpStatuser) createStateUpdateBody(job Job, curState, newState string) map[string]interface{} {
-	body := map[string]interface{}{
-		"id":    job.ID(),
-		"state": newState,
-		"cur":   curState,
-		"new":   newState,
-		"meta": map[string]interface{}{
-			// FIXME: track state_update_count really
-			"state_update_count": 1,
-		},
-	}
-
-	/* TODO: {
-	if job.Payload().Job.QueuedAt != nil {
-		body["queued_at"] = job.Payload().Job.QueuedAt.UTC().Format(time.RFC3339)
-	}
-	if !job.received.IsZero() {
-		body["received_at"] = job.received.UTC().Format(time.RFC3339)
-	}
-	if !job.started.IsZero() {
-		body["started_at"] = job.started.UTC().Format(time.RFC3339)
-	}
-	if !job.finished.IsZero() {
-		body["finished_at"] = job.finished.UTC().Format(time.RFC3339)
-	}
-
-	if job.Payload().Trace {
-		body["trace"] = true
-	}
-	} */
-
-	return body
 }

@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -10,27 +11,32 @@ import (
 )
 
 type Streamer interface {
-	Stream(context.Context, Job, string, io.Reader) error
+	Stream(context.Context, Job, Stream) error
 }
 
 func NewStreamer(log logrus.FieldLogger) Streamer {
-	return &httpStreamer{log: log.WithField("self", "http_streamer")}
+	return &urlStreamer{log: log.WithField("self", "http_streamer")}
 }
 
-type httpStreamer struct {
+type urlStreamer struct {
 	log logrus.FieldLogger
 }
 
-func (hs *httpStreamer) Stream(ctx context.Context, job Job, name string, r io.Reader) error {
+func (hs *urlStreamer) Stream(ctx context.Context, job Job, str Stream) error {
 	log := hs.log.WithFields(logrus.Fields{
 		"job_id": job.ID(),
-		"stream": name,
 	})
+
+	if str.Source() == nil || str.Dest() == nil {
+		err := fmt.Errorf("stream missing source/dest")
+		log.WithError(err).Error("cannot stream")
+		return err
+	}
 
 	for {
 		// { TODO: do http stuff
 		log.Debug("copying to stdout")
-		_, _ = io.Copy(os.Stdout, r)
+		_, _ = io.Copy(os.Stdout, str.Source().Reader())
 		// }
 		select {
 		case <-ctx.Done():
