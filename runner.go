@@ -70,8 +70,7 @@ func (er *execRunner) Run(ctx context.Context, job Job) error {
 	log.Debug("starting stdouterr streamer")
 
 	pr, pw := io.Pipe()
-	stdOutErr.Source().SetReader(pr)
-	stdOutErr.Dest().SetWriter(pw)
+	stdOutErr.SetSource(pr)
 
 	go func() {
 		err := er.streamer.Stream(ctx, job, stdOutErr)
