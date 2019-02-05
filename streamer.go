@@ -36,7 +36,7 @@ func (hs *urlStreamer) Stream(ctx context.Context, job Job, str Stream) error {
 	for {
 		// { TODO: do http stuff
 		log.Debug("copying to stdout")
-		_, _ = io.Copy(os.Stdout, str.Source().Reader())
+		_, _ = io.Copy(os.Stdout, str.Source())
 		// }
 		select {
 		case <-ctx.Done():

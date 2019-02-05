@@ -7,58 +7,43 @@ const (
 )
 
 type Stream interface {
-	Source() StreamInput
-	Dest() StreamOutput
-}
-
-type StreamInput interface {
 	Name() string
-	Reader() io.Reader
-	SetReader(io.Reader)
-}
-
-type StreamOutput interface {
-	Name() string
-	Writer() io.Writer
-	SetWriter(io.Writer)
+	Source() io.Reader
+	SetSource(io.Reader)
+	Dest() io.Writer
+	SetDest(io.Writer)
 }
 
 type ioStream struct {
-	source *ioInput
-	dest   *ioOutput
-}
-
-func (s *ioStream) Source() StreamInput { return s.source }
-func (s *ioStream) Dest() StreamOutput  { return s.dest }
-
-type ioInput struct {
 	name   string
-	reader io.Reader
+	source io.Reader
+	dest   io.Writer
 }
 
-func (i *ioInput) Name() string          { return i.name }
-func (i *ioInput) Reader() io.Reader     { return i.reader }
-func (i *ioInput) SetReader(r io.Reader) { i.reader = r }
-
-type ioOutput struct {
-	name   string
-	writer io.Writer
+func (s *ioStream) Name() string {
+	return s.name
 }
 
-func (o *ioOutput) Name() string          { return o.name }
-func (o *ioOutput) Writer() io.Writer     { return o.writer }
-func (o *ioOutput) SetWriter(w io.Writer) { o.writer = w }
+func (s *ioStream) Source() io.Reader {
+	return s.source
+}
+
+func (s *ioStream) SetSource(r io.Reader) {
+	s.source = r
+}
+
+func (s *ioStream) Dest() io.Writer {
+	return s.dest
+}
+
+func (s *ioStream) SetDest(w io.Writer) {
+	s.dest = w
+}
 
 func NewStdOutErrStream() Stream {
-	return &ioStream{
-		source: &ioInput{name: stdOutErrName},
-		dest:   &ioOutput{name: stdOutErrName},
-	}
+	return NewNamedStream(stdOutErrName)
 }
 
 func NewNamedStream(name string) Stream {
-	return &ioStream{
-		source: &ioInput{name: name},
-		dest:   &ioOutput{name: name},
-	}
+	return &ioStream{name: name}
 }
