@@ -92,10 +92,7 @@ func waitCommandAction(c *cli.Context) error {
 		return cli.Exit(fmt.Sprintf("failed to build processor ID: %v", err), 2)
 	}
 
-	src, err := NewSource(log, c.String("url"), processorID)
-	if err != nil {
-		return cli.Exit(fmt.Sprintf("failed to create job source: %v", err), 2)
-	}
+	src := NewRemoteSource(log, c.String("url"), processorID)
 
 	runner, err := NewRunner(log, NewStatuser(log), NewStreamer(log))
 	if err != nil {
@@ -126,10 +123,7 @@ func runCommandAction(c *cli.Context) error {
 		return cli.Exit(fmt.Sprintf("failed to build processor ID: %v", err), 2)
 	}
 
-	src, err := NewSource(log, fmt.Sprintf("file://%s", c.String("json")), processorID)
-	if err != nil {
-		return cli.Exit(fmt.Sprintf("failed to create job source: %v", err), 2)
-	}
+	src := NewLocalSource(log, c.String("json"), processorID)
 
 	log.Debug("creating job runner")
 	runner, err := NewRunner(log, NewStatuser(log), NewStreamer(log))

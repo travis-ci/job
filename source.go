@@ -18,69 +18,41 @@ import (
 )
 
 var (
-	urlSourceNoJobErr = fmt.Errorf("no jobs available")
+	remoteSourceNoJobErr = fmt.Errorf("no jobs available")
 )
 
 type Source interface {
 	Fetch(context.Context) (Job, error)
 }
 
-func NewSource(log logrus.FieldLogger, jobURL, processorID string) (Source, error) {
-	p := &urlSource{
+func NewRemoteSource(log logrus.FieldLogger, jobURL, processorID string) Source {
+	return &remoteSource{
 		log:         log,
 		jobURL:      jobURL,
 		processorID: processorID,
 	}
-
-	return p, nil
 }
 
-type urlSource struct {
+func NewLocalSource(log logrus.FieldLogger, jobPath, processorID string) Source {
+	return &localSource{
+		log:         log,
+		jobPath:     jobPath,
+		processorID: processorID,
+	}
+}
+
+type remoteSource struct {
 	log         logrus.FieldLogger
 	jobURL      string
 	processorID string
 }
 
-func (us *urlSource) Fetch(ctx context.Context) (Job, error) {
-	u, err := url.Parse(us.jobURL)
+func (rs *remoteSource) Fetch(ctx context.Context) (Job, error) {
+	u, err := url.Parse(rs.jobURL)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to parse job URL")
 	}
 
-	switch u.Scheme {
-	case "file":
-		return us.jobFromFile(u.Host + u.Path)
-	case "http", "https":
-		return us.jobFromRemote(ctx, u)
-	}
-
-	return nil, nil
-}
-
-func (us *urlSource) jobFromFile(path string) (Job, error) {
-	if path == "-" {
-		jobBytes, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			return nil, err
-		}
-
-		return newJobFromBytes(jobBytes)
-	}
-
-	abspath, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
-
-	jobBytes, err := ioutil.ReadFile(abspath)
-	if err != nil {
-		return nil, err
-	}
-
-	return newJobFromBytes(jobBytes)
-}
-
-func (us *urlSource) jobFromRemote(ctx context.Context, u *url.URL) (Job, error) {
 	popURL, err := url.Parse(u.String())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to copy job pop URL")
@@ -96,7 +68,7 @@ func (us *urlSource) jobFromRemote(ctx context.Context, u *url.URL) (Job, error)
 
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Travis-Site", "com")
-	req.Header.Add("From", us.processorID)
+	req.Header.Add("From", rs.processorID)
 	req = req.WithContext(ctx)
 
 	resp, err := client.Do(req)
@@ -107,7 +79,7 @@ func (us *urlSource) jobFromRemote(ctx context.Context, u *url.URL) (Job, error)
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNoContent {
-		return nil, urlSourceNoJobErr
+		return nil, remoteSourceNoJobErr
 	}
 
 	fetchResponsePayload := map[string]string{"job_id": ""}
@@ -135,7 +107,7 @@ func (us *urlSource) jobFromRemote(ctx context.Context, u *url.URL) (Job, error)
 
 	req.Header.Add("Travis-Infrastructure", "detached")
 	req.Header.Add("Travis-Site", "com")
-	req.Header.Add("From", us.processorID)
+	req.Header.Add("From", rs.processorID)
 	req = req.WithContext(ctx)
 
 	bo := backoff.NewExponentialBackOff()
@@ -146,7 +118,7 @@ func (us *urlSource) jobFromRemote(ctx context.Context, u *url.URL) (Job, error)
 	err = backoff.Retry(func() (err error) {
 		resp, err = client.Do(req)
 		if resp != nil && resp.StatusCode != http.StatusOK {
-			us.log.WithFields(logrus.Fields{
+			rs.log.WithFields(logrus.Fields{
 				"expected_status": http.StatusOK,
 				"actual_status":   resp.StatusCode,
 			}).Debug("job fetch failed")
@@ -172,4 +144,33 @@ func (us *urlSource) jobFromRemote(ctx context.Context, u *url.URL) (Job, error)
 	}
 
 	return newJobFromBytes(body)
+}
+
+type localSource struct {
+	log         logrus.FieldLogger
+	jobPath     string
+	processorID string
+}
+
+func (ls *localSource) Fetch(ctx context.Context) (Job, error) {
+	if ls.jobPath == "-" {
+		jobBytes, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, err
+		}
+
+		return newJobFromBytes(jobBytes)
+	}
+
+	abspath, err := filepath.Abs(ls.jobPath)
+	if err != nil {
+		return nil, err
+	}
+
+	jobBytes, err := ioutil.ReadFile(abspath)
+	if err != nil {
+		return nil, err
+	}
+
+	return newJobFromBytes(jobBytes)
 }
